@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Mantis Updater</title>
+  <script src="https://officeapis.public.onecdn.static.microsoft/1/office.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="updater.js"></script>
+  <style>
+    :root { --blue: #4682b4; --text: #1f1f1f; --muted: #616161; --bg: #fff; --panel: #f6f8fa; --border: #e1e4e8; --ok: #107c10; --err: #c50f1f; --warn: #8a5300; }
+    @media (prefers-color-scheme: dark) {
+      :root { --text: #f0f0f0; --muted: #b0b0b0; --bg: #1f1f1f; --panel: #2a2a2a; --border: #3b3b3b; --blue: #6fa8d6; --ok: #54b054; --err: #ff6b6b; --warn: #e0a84a; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; padding: 12px 14px 24px; font-family: "Segoe UI", -apple-system, Roboto, sans-serif; font-size: 13px; color: var(--text); background: var(--bg); }
+    h1 { font-size: 17px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+    h2 { font-size: 13px; margin: 16px 0 6px; }
+    p, .muted { color: var(--muted); margin: 0 0 10px; }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+    .tabs button { flex: 1; background: none; color: var(--muted); border: none; border-bottom: 2px solid transparent; padding: 7px 4px; font: inherit; cursor: pointer; margin: 0; width: auto; border-radius: 0; }
+    .tabs button.on { color: var(--blue); border-bottom-color: var(--blue); font-weight: 600; }
+    section { display: none; } section.on { display: block; }
+    .card { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; margin-bottom: 10px; }
+    .card b { display: block; font-size: 14px; word-break: break-word; }
+    label { display: block; font-weight: 600; font-size: 12px; margin: 10px 0 4px; }
+    input, textarea { width: 100%; padding: 7px 8px; font: inherit; border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); }
+    textarea { resize: vertical; min-height: 70px; }
+    button { width: 100%; margin-top: 8px; padding: 8px; font: inherit; color: #fff; background: var(--blue); border: 1px solid var(--blue); border-radius: 4px; cursor: pointer; }
+    button.secondary { background: var(--bg); color: var(--blue); }
+    button:disabled { opacity: .5; cursor: default; }
+    .row { display: flex; gap: 8px; } .row > * { flex: 1; }
+    .msg { margin-top: 10px; white-space: pre-wrap; word-break: break-word; }
+    .ok { color: var(--ok); } .err { color: var(--err); } .warn { color: var(--warn); }
+    .answer { background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 10px; white-space: pre-wrap; margin-top: 10px; min-height: 40px; }
+    .tablewrap { max-height: 220px; overflow: auto; border: 1px solid var(--border); border-radius: 4px; }
+    table { border-collapse: collapse; font-size: 11px; width: max-content; min-width: 100%; }
+    th, td { border-bottom: 1px solid var(--border); padding: 3px 6px; text-align: left; white-space: nowrap; max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
+    th { position: sticky; top: 0; background: var(--panel); }
+    .log { font-family: Consolas, monospace; font-size: 11px; max-height: 380px; overflow: auto; background: var(--panel); border: 1px solid var(--border); border-radius: 4px; padding: 6px; white-space: pre-wrap; }
+    .confirm { border: 1px solid var(--blue); border-radius: 6px; padding: 10px; margin-top: 8px; }
+    input[type=file] { display: none; }
+  </style>
+</head>
+<body>
+  <h1><img src="assets/icon-32.png" width="22" height="22" alt="" /> Mantis Updater</h1>
+
+  <div class="tabs" role="tablist">
+    <button class="on" data-tab="update">Update</button>
+    <button data-tab="ai">AI</button>
+    <button data-tab="settings">Settings</button>
+    <button data-tab="log">Log</button>
+  </div>
+
+  <!-- ================= UPDATE ================= -->
+  <section id="update" class="on">
+    <div class="card" id="calcCard"><span class="muted">Reading this workbook…</span></div>
+    <button id="btnApply" disabled>Apply updates to this calculator</button>
+    <div id="confirmBox" class="confirm" hidden>
+      <div id="confirmText"></div>
+      <div class="row"><button id="btnConfirm">Apply</button><button id="btnCancel" class="secondary">Cancel</button></div>
+    </div>
+    <div id="updMsg" class="msg" role="status"></div>
+
+    <h2>Patch table</h2>
+    <p id="patchCount"></p>
+    <div class="row">
+      <button id="btnFetch" class="secondary">Fetch from Mantis</button>
+      <button id="btnLoadCsv" class="secondary">Load CSV…</button>
+    </div>
+    <input id="csvFile" type="file" accept=".csv,text/csv" />
+    <div id="patchMsg" class="msg" role="status"></div>
+    <div class="tablewrap" id="patchTable" hidden></div>
+  </section>
+
+  <!-- ================= AI ================= -->
+  <section id="ai">
+    <p>Only your question and the scorecard values are sent. Never formulas, never your documents. (POPIA)</p>
+    <label for="question">Your question</label>
+    <textarea id="question" placeholder="Leave blank to use the question in the AI sheet"></textarea>
+    <button id="btnAsk">Ask AI</button>
+    <div class="row">
+      <button id="btnExplain" class="secondary">Explain my score</button>
+      <button id="btnNext" class="secondary">Reach the next level</button>
+    </div>
+    <div class="row">
+      <button id="btnSnapshot" class="secondary">Export AI snapshot</button>
+      <button id="btnClear" class="secondary">Clear</button>
+    </div>
+    <div id="aiMsg" class="msg" role="status"></div>
+    <div id="answer" class="answer" hidden></div>
+    <p class="muted" style="margin-top:12px">Provider (Mantis AI or My own key) and your own API key are set on the calculator's AI sheet, cells C12 and C13. A key stays in that file and is never sent to Mantis.</p>
+  </section>
+
+  <!-- ================= SETTINGS ================= -->
+  <section id="settings">
+    <p>These replace the Config sheet of the old .xlam. They are stored with the add-in on this computer.</p>
+    <label for="cfgPatchURL">Patch URL (CSV, same 13 columns as the patch table)</label>
+    <input id="cfgPatchURL" type="url" placeholder="https://…/patches.csv" />
+    <label for="cfgMantisAIEndpoint">Mantis AI endpoint</label>
+    <input id="cfgMantisAIEndpoint" type="url" placeholder="https://…" />
+    <label for="cfgAnthropicModel">Anthropic model (own key)</label>
+    <input id="cfgAnthropicModel" type="text" />
+    <label for="cfgOpenAIModel">OpenAI model (own key)</label>
+    <input id="cfgOpenAIModel" type="text" />
+    <button id="btnSaveCfg">Save settings</button>
+    <div id="cfgMsg" class="msg" role="status"></div>
+    <h2>About</h2>
+    <p id="about"></p>
+  </section>
+
+  <!-- ================= LOG ================= -->
+  <section id="log">
+    <div class="log" id="logBox"></div>
+    <div class="row">
+      <button id="btnCopyLog" class="secondary">Copy log</button>
+      <button id="btnClearLog" class="secondary">Clear log</button>
+    </div>
+    <div id="logMsg" class="msg" role="status"></div>
+  </section>
+
+  <script>
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      var CFG_KEYS = ["PatchURL", "MantisAIEndpoint", "AnthropicModel", "OpenAIModel"];
+      var calc = null;
+
+      function say(el, cls, text) { el.className = "msg " + (cls || ""); el.textContent = text || ""; }
+      function errText(e) { return e && e.message ? e.message : String(e); }
+      function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+      // tabs
+      document.querySelectorAll(".tabs button").forEach(function (b) {
+        b.addEventListener("click", function () {
+          document.querySelectorAll(".tabs button").forEach(function (x) { x.classList.toggle("on", x === b); });
+          document.querySelectorAll("section").forEach(function (s) { s.classList.toggle("on", s.id === b.dataset.tab); });
+          if (b.dataset.tab === "update") refreshCalc();
+          if (b.dataset.tab === "log") renderLog();
+        });
+      });
+
+      async function busy(btns, fn) {
+        btns.forEach(function (b) { b.disabled = true; });
+        try { return await fn(); } finally { btns.forEach(function (b) { b.disabled = false; }); }
+      }
+
+      // ---------- calculator card ----------
+      async function refreshCalc() {
+        try {
+          calc = await MU.readCalculator();
+          if (calc.isCalc) {
+            $("calcCard").innerHTML = "<span class='muted'>This workbook</span><b>" + esc(calc.product) + " " + esc(calc.version) + "</b>" +
+              "<span class='muted'>" + esc(calc.workbookName) + "</span><br><span class='" + (calc.hasAISheet ? "ok" : "warn") + "'>" +
+              (calc.hasAISheet ? "AI sheet installed" : "No AI sheet yet - Apply updates adds it") + "</span>";
+          } else {
+            $("calcCard").innerHTML = "<b>Not a Mantis calculator</b><span class='muted'>Open a Mantis calculator (it needs the Version_Num and Totalscore names and the Versions and About sheets), then click here again.</span>";
+          }
+          $("btnApply").disabled = !calc.isCalc;
+        } catch (e) {
+          $("calcCard").innerHTML = "<span class='err'>" + esc(errText(e)) + "</span>";
+        }
+      }
+      $("calcCard").addEventListener("click", refreshCalc);
+
+      // ---------- apply ----------
+      $("btnApply").addEventListener("click", async function () {
+        await refreshCalc();
+        if (!calc || !calc.isCalc) return;
+        var n = MU.getPatches().length;
+        $("confirmText").textContent = "Apply Mantis updates to " + (calc.workbookName || "this workbook") + " (" + calc.product + " " + calc.version + ")? " +
+          n + " patch row(s) loaded. The workbook is saved afterwards.";
+        $("confirmBox").hidden = false;
+        $("btnApply").hidden = true;
+      });
+      $("btnCancel").addEventListener("click", function () { $("confirmBox").hidden = true; $("btnApply").hidden = false; });
+      $("btnConfirm").addEventListener("click", function () {
+        busy([$("btnConfirm"), $("btnCancel")], async function () {
+          say($("updMsg"), "", "Applying updates…");
+          try {
+            var r = await MU.applyUpdates();
+            say($("updMsg"), "ok", "Done.\nPatches applied: " + r.applied + "\nPatches skipped: " + r.skipped + "\nAI: " + r.ai +
+              (r.saved ? "\nSaved." : "\nNot saved automatically - press Ctrl+S.") + "\nDetails are on the Log tab and in the calculator's Versions sheet.");
+          } catch (e) {
+            say($("updMsg"), "err", errText(e));
+          }
+          $("confirmBox").hidden = true; $("btnApply").hidden = false;
+          refreshCalc();
+        });
+      });
+
+      // ---------- patch table ----------
+      function renderPatches() {
+        var rows = MU.getPatches();
+        $("patchCount").textContent = rows.length ? rows.length + " patch row(s) loaded." : "No patch rows loaded. Fetch them from Mantis or load a CSV with the 13 columns " + MU.PATCH_COLUMNS.join(", ") + ".";
+        if (!rows.length) { $("patchTable").hidden = true; return; }
+        var h = "<table><thead><tr>" + MU.PATCH_COLUMNS.map(function (c) { return "<th>" + c + "</th>"; }).join("") + "</tr></thead><tbody>";
+        rows.forEach(function (r) {
+          h += "<tr>" + MU.PATCH_COLUMNS.map(function (c) { return "<td title='" + esc(r[c]) + "'>" + esc(r[c]) + "</td>"; }).join("") + "</tr>";
+        });
+        $("patchTable").innerHTML = h + "</tbody></table>";
+        $("patchTable").hidden = false;
+      }
+      $("btnFetch").addEventListener("click", function () {
+        busy([$("btnFetch")], async function () {
+          say($("patchMsg"), "", "Fetching…");
+          try { var n = await MU.fetchPatches(); say($("patchMsg"), "ok", n + " patch rows fetched from Mantis."); }
+          catch (e) { say($("patchMsg"), "err", "Could not fetch patches (" + errText(e) + "). Using the local patch table."); }
+          renderPatches();
+        });
+      });
+      $("btnLoadCsv").addEventListener("click", function () { $("csvFile").value = ""; $("csvFile").click(); });
+      $("csvFile").addEventListener("change", function () {
+        var f = this.files && this.files[0];
+        if (!f) return;
+        var rd = new FileReader();
+        rd.onload = function () {
+          try { var n = MU.loadPatchCsv(String(rd.result), f.name); say($("patchMsg"), "ok", n + " patch rows loaded from " + f.name + "."); }
+          catch (e) { say($("patchMsg"), "err", errText(e)); }
+          renderPatches();
+        };
+        rd.onerror = function () { say($("patchMsg"), "err", "Could not read " + f.name); };
+        rd.readAsText(f);
+      });
+
+      // ---------- AI ----------
+      var aiButtons = ["btnAsk", "btnExplain", "btnNext", "btnSnapshot", "btnClear"].map($);
+      function ask(kind) {
+        busy(aiButtons, async function () {
+          say($("aiMsg"), "", "Thinking…");
+          $("answer").hidden = true;
+          try {
+            var r = await MU.runQuestion(kind, $("question").value);
+            $("question").value = r.question;
+            $("answer").textContent = r.answer;
+            $("answer").hidden = false;
+            say($("aiMsg"), "ok", "Answer written to the AI sheet (" + r.mode + ").");
+          } catch (e) { say($("aiMsg"), "err", errText(e)); }
+        });
+      }
+      $("btnAsk").addEventListener("click", function () { ask("ask"); });
+      $("btnExplain").addEventListener("click", function () { ask("explain"); });
+      $("btnNext").addEventListener("click", function () { ask("next"); });
+      $("btnClear").addEventListener("click", function () {
+        busy(aiButtons, async function () {
+          try { await MU.clearAI(); $("question").value = ""; $("answer").hidden = true; say($("aiMsg"), "ok", "Cleared."); }
+          catch (e) { say($("aiMsg"), "err", errText(e)); }
+        });
+      });
+      $("btnSnapshot").addEventListener("click", function () {
+        busy(aiButtons, async function () {
+          say($("aiMsg"), "", "Building snapshot…");
+          try {
+            var name = await MU.exportSnapshot();
+            say($("aiMsg"), "ok", "A values-only snapshot opened as a new workbook. Save it (suggested name: " + name + "), then upload it to Claude or ChatGPT. Do not upload the calculator itself.");
+          } catch (e) { say($("aiMsg"), "err", errText(e)); }
+        });
+      });
+
+      // ---------- settings ----------
+      function renderCfg() {
+        var c = MU.getConfig();
+        CFG_KEYS.forEach(function (k) { $("cfg" + k).value = c[k] || ""; });
+      }
+      $("btnSaveCfg").addEventListener("click", function () {
+        var c = {};
+        CFG_KEYS.forEach(function (k) { c[k] = $("cfg" + k).value.trim(); });
+        MU.setConfig(c);
+        say($("cfgMsg"), "ok", "Saved.");
+      });
+
+      // ---------- log ----------
+      function renderLog() {
+        var log = MU.getLog();
+        $("logBox").textContent = log.length ? log.map(function (l) { return l.t + "  " + l.msg; }).join("\n") : "(empty)";
+        $("logBox").scrollTop = $("logBox").scrollHeight;
+      }
+      MU.onLog(function () { if ($("log").classList.contains("on")) renderLog(); });
+      $("btnClearLog").addEventListener("click", function () { MU.clearLog(); renderLog(); });
+      $("btnCopyLog").addEventListener("click", async function () {
+        var text = MU.getLog().map(function (l) { return l.t + "\t" + l.msg; }).join("\n");
+        try { await navigator.clipboard.writeText(text); say($("logMsg"), "ok", "Copied."); }
+        catch (e) {
+          var r = document.createRange(); r.selectNodeContents($("logBox"));
+          var s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+          say($("logMsg"), "", "Selected - press Ctrl+C to copy.");
+        }
+      });
+
+      Office.onReady(function (info) {
+        $("about").textContent = MU.ADDIN_NAME + " " + MU.ADDIN_VERSION + " - applies Mantis patches and the AI tools to calculators already in use, without a new release. Mantis Networks (Pty) Ltd.";
+        renderCfg();
+        renderPatches();
+        if (info.host !== Office.HostType.Excel) { $("calcCard").textContent = "Open this add-in in Excel."; return; }
+        if (!Office.context.requirements.isSetSupported("ExcelApi", "1.7")) {
+          $("calcCard").innerHTML = "<span class='err'>This version of Excel is too old for Mantis Updater (needs Excel API 1.7 or later).</span>";
+          return;
+        }
+        refreshCalc();
+      });
+    })();
+  </script>
+</body>
+</html>
